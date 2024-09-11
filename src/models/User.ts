@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
-const {Schema, Types: {ObjectId}} = mongoose;
+import mongoose, { Schema, Types, HydratedDocument } from "mongoose";
+import type { UserI } from "../types";
 
-const userSchema = Schema({
+// Define the user schema
+const userSchema = new Schema<UserI>({
     first_name: {
         type: String,
         required: [true, 'First name is required.'],
@@ -58,25 +59,29 @@ const userSchema = Schema({
         default: false,
     },
     friends: {
-        type: Array,
+        type: [Types.ObjectId],
         default: [],
+        ref: 'User',
     },
     followings: {
-        type: Array,
+        type: [Types.ObjectId],
         default: [],
+        ref: 'User',
     },
     followers: {
-        type: Array,
+        type: [Types.ObjectId],
         default: [],
+        ref: 'User',
     },
     requests: {
-        type: Array,
+        type: [Types.ObjectId],
         default: [],
+        ref: 'User',
     },
     search: [
         {
             user: {
-                type: ObjectId,
+                type: Types.ObjectId,
                 ref: 'User',
             }
         }
@@ -117,12 +122,12 @@ const userSchema = Schema({
     savedPosts: [
         {
             post: {
-                type: ObjectId,
+                type: Types.ObjectId,
                 ref: 'Post',
             },
             savedAt: {
                 type: Date,
-                default: new Date(),
+                default: Date.now,
             }
         }
     ],
@@ -130,12 +135,6 @@ const userSchema = Schema({
     timestamps: true,
 });
 
-let User;
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 
-try {
-    User = mongoose.model('User');
-} catch (error) {
-    User = mongoose.model('User', userSchema);
-}
-
-module.exports = User;
+export default User;

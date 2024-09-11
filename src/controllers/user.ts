@@ -1,11 +1,12 @@
-const User = require("../models/User");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const {validateEmail, validateLength, validateUsername} = require("../helpers/validations");
-const {generateToken} = require("../helpers/tokens");
-const {sendVerificationEmail} = require("../helpers/mailer");
+import { Request, Response } from 'express';
+import User from "../models/User";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import {validateEmail, validateLength, validateUsername} from "../helpers/validations";
+import {generateToken} from "../helpers/tokens";
+import {sendVerificationEmail} from "../helpers/mailer";
 
-exports.register = async (req, res) => {
+export const register = async (req: Request, res: Response) => {
   const {
     first_name,
     last_name,
@@ -16,8 +17,6 @@ exports.register = async (req, res) => {
     bDay,
     gender,
   } = req.body;
-
-  console.log(req.body.first_name)
 
   if (!validateLength(first_name, 3, 30)) {
     return res.status(400).json({ message: 'First name must be between 3 to 30 characters' });
@@ -79,21 +78,30 @@ exports.register = async (req, res) => {
   }
 };
 
-exports.activateAccount = async (req, res) => {
+export const activateAccount = async (req: Request, res: Response) => {
   const { token } = req.body;
-  const user = jwt.verify(token, process.env.JWT_SECRET);
-  const check = await User.findById(user.id);
 
-  if (check.verified) {
-    return res.status(400).json({ message: 'Account already verified' });
+  try {
+    const user = jwt.verify(token, process.env.JWT_SECRET as string) as jwt.JwtPayload;
+
+    if (!user || typeof user === 'string') {
+      return res.status(400).json({ message: 'Invalid token' });
+    }
+
+    const check = await User.findById(user.id);
+    if (check?.verified) {
+      return res.status(400).json({ message: 'Account already verified' });
+    }
+
+    await User.findByIdAndUpdate(user.id, { verified: true });
+    res.json({ message: 'Account verified successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
+};
 
-  await User.findByIdAndUpdate(user.id, { verified: true });
-
-  res.json({ message: 'Account verified successfully' });
-}
-
-exports.login = async (req, res) => {
+export const login = async (req: Request, res: Response) => {
   try {
     const {email, password} = req.body;
     const user = await User.findOne({ email });
@@ -120,7 +128,7 @@ exports.login = async (req, res) => {
       verified: user.verified,
       message: 'User registered successfully. Please check your email to verify your account',
     });
-  } catch (e) {
+  } catch (e: any) {
     res.status(500).json({ message: e.message });
   }
 }
