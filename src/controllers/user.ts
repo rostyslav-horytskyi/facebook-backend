@@ -132,3 +132,30 @@ export const login = async (req: Request, res: Response) => {
     res.status(500).json({ message: e.message });
   }
 }
+
+export const getCurrentUser = async (req: Request, res: Response) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ message: "No token, authorization denied" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as jwt.JwtPayload;
+
+    if (!decoded.id) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    const user = await User.findById(decoded.id).select("-password"); // Exclude password field
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
