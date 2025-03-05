@@ -4,7 +4,10 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import {validateEmail, validateLength, validateUsername} from "../helpers/validations";
 import {generateToken} from "../helpers/tokens";
-import {sendVerificationEmail} from "../helpers/mailer";
+import {sendResetCode, sendVerificationEmail} from "../helpers/mailer";
+import {AuthenticatedRequest, ErrorResponse, ResetPasswordRequestBody, UserResponse} from "../types";
+import Code from "../models/Code";
+import generateCode from "../helpers/generate-code";
 
 export const register = async (req: Request, res: Response) => {
   const {
@@ -157,5 +160,113 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const resendVerification = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = req.user?.id;
+    const user = await User.findById(id);
+
+    if (user.verified) {
+      return res.status(400).json({ message: 'Account already verified' });
+    }
+
+    const emailVerificationToken = generateToken({id: user._id.toString()}, "30m");
+    const url = `${process.env.BASE_URL}/activate/${emailVerificationToken}`;
+
+    await sendVerificationEmail(user.email, user.first_name, url);
+
+    res.status(200).json({ message: 'Verification email sent' });
+  } catch (err) {
+    res.status(500).json({ message: (err as Error).message });
+  }
+};
+
+export const findUser = async (req: Request<{}, {}, ResetPasswordRequestBody>, res: Response<UserResponse | ErrorResponse>): Promise<Response> => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email }).select("-password");
+    if (!user) {
+      return res.status(400).json({
+        message: "Account does not exist.",
+      });
+    }
+    return res.status(200).json({
+      email: user.email,
+      picture: user.picture,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: (error as Error).message });
+  }
+};
+
+export const sendResetPasswordCode = async (req: Request<{}, {}, ResetPasswordRequestBody>, res: Response<ErrorResponse>): Promise<Response> => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email }).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await Code.findOneAndDelete({ user: user._id });
+
+    const code = generateCode(5);
+
+    await new Code({
+      code,
+      user: user._id,
+    }).save();
+
+    sendResetCode(user.email, user.first_name, code);
+
+    return res.status(200).json({
+      message: "Email reset code has been sent to your email",
+    });
+  } catch (error) {
+    return res.status(500).json({ message: (error as Error).message });
+  }
+};
+
+export const validateResetCode = async (req: Request<{}, {}, ResetPasswordRequestBody>, res: Response<ErrorResponse>): Promise<Response> => {
+  try {
+    const { email, code } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const Dbcode = await Code.findOne({ user: user._id });
+    if (!Dbcode || Dbcode.code !== code) {
+      return res.status(400).json({
+        message: "Verification code is incorrect.",
+      });
+    }
+    return res.status(200).json({ message: "Verification successful." });
+  } catch (error) {
+    return res.status(500).json({ message: (error as Error).message });
+  }
+};
+
+export const changePassword = async (req: Request<{}, {}, ResetPasswordRequestBody>, res: Response<ErrorResponse>): Promise<Response> => {
+  try {
+    const {email, password} = req.body;
+
+    if (!password) {
+      return res.status(400).json({message: "Password is required."});
+    }
+
+    const cryptedPassword = await bcrypt.hash(password, 12);
+    await User.findOneAndUpdate(
+        {email},
+        {
+          password: cryptedPassword,
+        }
+    );
+
+    return res.status(200).json({message: "Password updated successfully."});
+  } catch (error) {
+    return res.status(500).json({message: (error as Error).message});
   }
 };

@@ -1,4 +1,6 @@
 import {Document} from "mongoose";
+import { Request } from "express";
+import { JwtPayload } from "jsonwebtoken";
 
 export interface UserI extends Document {
     first_name: string;
@@ -32,3 +34,23 @@ export interface UserI extends Document {
     };
     savedPosts: {post: string; savedAt: Date}[];
 }
+
+export interface AuthenticatedRequest extends Request {
+    user?: JwtPayload | { id: string };
+}
+
+export interface ResetPasswordRequestBody {
+    email: string;
+    code?: string;
+    password?: string;
+}
+
+export interface UserResponse {
+    email: string;
+    picture: string;
+}
+
+export interface ErrorResponse {
+    message: string;
+}
+
